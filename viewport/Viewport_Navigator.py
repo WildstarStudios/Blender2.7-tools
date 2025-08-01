@@ -7,7 +7,7 @@ import time
 
 bl_info = {
     "name": "Viewport Navigator",
-    "author": "WildStar Studio",
+    "author": "Sirsloth2008",
     "version": (1, 0),
     "blender": (2, 79, 0),
     "location": "3D View > Properties Region > View",
