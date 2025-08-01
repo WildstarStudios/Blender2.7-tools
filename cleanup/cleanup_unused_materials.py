@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 bl_info = {
     "name": "Material Cleanup",
-    "author": "WildStar Studios",
+    "author": "Sirsloth2008",
     "version": (1, 0),
     "blender": (2, 79, 0),
     "location": "File > Clean Up",
