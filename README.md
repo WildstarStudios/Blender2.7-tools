@@ -8,3 +8,5 @@ planned
 ⬛ add modern renderer
 
 ⬛ enhance timeline thing
+
+⬛ fix the modifier panel bug
