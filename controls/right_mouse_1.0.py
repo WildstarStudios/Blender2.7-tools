@@ -3,7 +3,7 @@
 
 bl_info = {
     "name": "Right Mouse Navigation",
-    "author": "Your Name",
+    "author": "WildstarStudios",
     "version": (1, 0),
     "blender": (2, 79, 0),
     "location": "View3D",
