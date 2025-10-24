@@ -3,8 +3,8 @@
 
 bl_info = {
     "name": "Right Mouse Navigation",
-    "author": "Your Name",
-    "version": (1, 0),
+    "author": "WildstarStudios",
+    "version": (1, 1),
     "blender": (2, 79, 0),
     "location": "View3D",
     "description": "Right mouse button navigation with context menu on release",
@@ -25,7 +25,7 @@ class RightMouseNavigationPreferences(AddonPreferences):
     time = FloatProperty(
         name="Time Threshold",
         description="How long you have to hold right mouse to open menu",
-        default=1.0,
+        default=0.3,
         min=0.1,
         max=10,
     )
@@ -100,21 +100,25 @@ class RMN_OT_right_mouse_navigation(Operator):
     _callMenu = False
     _ortho = False
     _back_to_ortho = False
+    _mouse_moved = False
+    _start_x = 0
+    _start_y = 0
     
+    # Updated menu names for Blender 2.79b
     menu_by_mode = {
-        "OBJECT": "VIEW3D_MT_object_context_menu",
-        "EDIT_MESH": "VIEW3D_MT_edit_mesh_context_menu",
-        "EDIT_SURFACE": "VIEW3D_MT_edit_curve_context_menu",
-        "EDIT_TEXT": "VIEW3D_MT_edit_font_context_menu",
-        "EDIT_ARMATURE": "VIEW3D_MT_armature_context_menu",
-        "EDIT_CURVE": "VIEW3D_MT_edit_curve_context_menu",
-        "EDIT_METABALL": "VIEW3D_MT_edit_metaball_context_menu",
-        "EDIT_LATTICE": "VIEW3D_MT_edit_lattice_context_menu",
-        "POSE": "VIEW3D_MT_pose_context_menu",
-        "PAINT_VERTEX": "VIEW3D_MT_paint_vertex",
-        "PAINT_WEIGHT": "VIEW3D_MT_paint_weight",
-        "PAINT_TEXTURE": "VIEW3D_MT_paint_texture",
-        "SCULPT": "VIEW3D_MT_sculpt",
+        "OBJECT": "VIEW3D_MT_object_specials",
+        "EDIT_MESH": "VIEW3D_MT_edit_mesh_specials",
+        "EDIT_SURFACE": "VIEW3D_MT_edit_curve_specials",
+        "EDIT_TEXT": "VIEW3D_MT_edit_font_specials",
+        "EDIT_ARMATURE": "VIEW3D_MT_edit_armature_specials",
+        "EDIT_CURVE": "VIEW3D_MT_edit_curve_specials",
+        "EDIT_METABALL": "VIEW3D_MT_edit_metaball_specials",
+        "EDIT_LATTICE": "VIEW3D_MT_edit_lattice_specials",
+        "POSE": "VIEW3D_MT_pose_specials",
+        "PAINT_VERTEX": "VIEW3D_MT_vertex_specials",
+        "PAINT_WEIGHT": "VIEW3D_MT_weight_specials",
+        "PAINT_TEXTURE": "VIEW3D_MT_paint_specials",
+        "SCULPT": "VIEW3D_MT_sculpt_specials",
     }
 
     def modal(self, context, event):
@@ -124,17 +128,19 @@ class RMN_OT_right_mouse_navigation(Operator):
 
         space_type = context.space_data.type
 
+        # Check if mouse moved significantly
+        if event.type == 'MOUSEMOVE' and not self._mouse_moved:
+            if abs(event.mouse_x - self._start_x) > 5 or abs(event.mouse_y - self._start_y) > 5:
+                self._mouse_moved = True
+
         if space_type == "VIEW_3D":
-            # Check if the Viewport is Perspective or Orthographic
             if context.space_data.region_3d.is_perspective:
                 self._ortho = False
             else:
                 self._back_to_ortho = addon_prefs.return_to_ortho_on_exit
 
-        # The _finished Boolean acts as a flag to exit the modal loop
         if self._finished:
             def reset_cursor():
-                # Reset blender window cursor to previous position
                 area = context.area
                 x = area.x
                 y = area.y
@@ -158,18 +164,14 @@ class RMN_OT_right_mouse_navigation(Operator):
         if space_type == "VIEW_3D" or (space_type == "NODE_EDITOR" and enable_nodes):
             if event.type in {"RIGHTMOUSE"}:
                 if event.value in {"RELEASE"}:
-                    # This brings back our mouse cursor to use with the menu
                     context.window.cursor_modal_restore()
                     
-                    # If the length of time you've been holding down
-                    # Right Mouse is shorter than the threshold value,
-                    # then set flag to call a context menu
-                    if self._count < addon_prefs.time:
+                    # If mouse didn't move much AND time threshold not met, show menu
+                    if not self._mouse_moved and self._count < addon_prefs.time:
                         self._callMenu = True
-                        # For walk navigation, we let it cancel naturally when menu appears
                     else:
-                        # Navigation completed successfully - walk operator handles confirmation
-                        pass
+                        # Mouse moved - navigation completed, don't show menu
+                        self._callMenu = False
                     
                     self.cancel(context)
                     self._finished = True
@@ -198,19 +200,24 @@ class RMN_OT_right_mouse_navigation(Operator):
                 try:
                     bpy.ops.wm.call_menu(name=self.menu_by_mode[context.mode])
                 except (RuntimeError, KeyError):
-                    # Fallback for modes not in the dictionary
-                    if context.mode.startswith("PAINT_"):
-                        bpy.ops.wm.call_menu(name="VIEW3D_MT_paint_generic")
-                    else:
-                        bpy.ops.wm.call_menu(name="VIEW3D_MT_object_context_menu")
+                    # Fallback for any mode
+                    try:
+                        bpy.ops.wm.call_menu(name="VIEW3D_MT_specials")
+                    except:
+                        pass
         else:
             if space_type == "VIEW_3D":
                 bpy.ops.view3d.select("INVOKE_DEFAULT")
 
     def invoke(self, context, event):
-        # Store Blender cursor position
-        self.view_x = event.mouse_x
-        self.view_y = event.mouse_y
+        # Store initial mouse position and cursor
+        self._start_x = event.mouse_x
+        self._start_y = event.mouse_y
+        self._mouse_moved = False
+        self._count = 0
+        self._finished = False
+        self._callMenu = False
+        
         return self.execute(context)
 
     def execute(self, context):
@@ -221,21 +228,19 @@ class RMN_OT_right_mouse_navigation(Operator):
 
         space_type = context.space_data.type
 
-        # Execute is the first thing called in our operator
         if space_type == "VIEW_3D":
             view = context.space_data.region_3d.view_perspective
             if not (view == "CAMERA" and disable_camera):
                 try:
-                    # Start walk navigation - let it handle its own confirmation
+                    # Use fly navigation instead of walk - it confirms on right mouse release
                     bpy.ops.view3d.walk('INVOKE_DEFAULT')
                     
-                    # Adding the timer and starting the loop
                     wm = context.window_manager
                     self._timer = wm.event_timer_add(0.1, window=context.window)
                     wm.modal_handler_add(self)
                     return {"RUNNING_MODAL"}
-                except RuntimeError:
-                    self.report({"ERROR"}, "Cannot Navigate an Object with Constraints")
+                except RuntimeError as e:
+                    self.report({"ERROR"}, "Cannot navigate: " + str(e))
                     return {"CANCELLED"}
             else:
                 return {"CANCELLED"}
@@ -248,7 +253,10 @@ class RMN_OT_right_mouse_navigation(Operator):
             return {"RUNNING_MODAL"}
 
         elif space_type == "IMAGE_EDITOR":
-            bpy.ops.wm.call_menu(name="VIEW3D_MT_paint_texture")
+            try:
+                bpy.ops.wm.call_menu(name="VIEW3D_MT_paint_specials")
+            except:
+                pass
             return {"FINISHED"}
         
         return {"CANCELLED"}
@@ -352,9 +360,6 @@ def register():
                 for key in active_kc.keymaps[mode].keymap_items:
                     if key.type == "RIGHTMOUSE" and key.active:
                         key.active = False
-
-        # Remove problematic walk modal keymap adjustments
-        # Blender 2.79b's walk navigation will handle confirmation naturally
 
 def unregister():
     # Remove UI
